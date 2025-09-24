@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>محوّل بث HLS</title>
+</head>
+<body>
+  <h3>محوّل بث HLS</h3>
+
+  <label>مصدر البث (SRT/UDP/HLS m3u8):</label><br/>
+  <input id="src" style="width: 480px" placeholder="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" />
+  <select id="mode">
+    <option value="copy">copy (أسرع)</option>
+    <option value="transcode">transcode</option>
+  </select>
+  <button id="btnCreate">إنشاء رابط جديد</button>
+  <br/><br/>
+
+  <label>الرابط الناتج (انسخه وشاركه):</label><br/>
+  <input id="out" style="width: 480px" readonly />
+  <button id="btnCopy">نسخ</button>
+
+  <pre id="debug" style="background:#111;color:#0f0;padding:8px;max-width:680px;max-height:180px;overflow:auto"></pre>
+
+  <video id="player" controls style="width: 640px;max-width:95%"></video>
+
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  <script>
+  (() => {
+    const $src = document.querySelector('#src');
+    const $mode = document.querySelector('#mode');
+    const $out = document.querySelector('#out');
+    const $btn = document.querySelector('#btnCreate');
+    const $copy= document.querySelector('#btnCopy');
+    const $v   = document.querySelector('#player');
+    const $log = document.querySelector('#debug');
+
+    const log = m => $log.textContent += m + '\n';
+
+    async function createLink(){
+      const srcUrl = ($src.value||'').trim();
+      const mode   = ($mode.value||'copy').trim();
+      if(!srcUrl) return alert('ضع رابط المصدر');
+
+      const r = await fetch('/api/create', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ srcUrl, mode })
+      });
+      if(!r.ok){ log('فشل إنشاء الرابط'); return; }
+      const data = await r.json(); // {id, url: "/hls/<id>/index.m3u8"}
+      const rel  = data.url;
+      const abs  = location.origin + rel;
+
+      $out.value = abs;
+      log(`id=${data.id} rel=${rel}`);
+
+      for(let i=0;i<15;i++){
+        try{
+          const h = await fetch(rel, { method:'HEAD', cache:'no-store' });
+          if(h.ok) break;
+        }catch{}
+        await new Promise(r=>setTimeout(r,700));
+      }
+      try{
+        if(Hls.isSupported()){
+          const hls = new Hls({ maxBufferLength: 10 });
+          hls.loadSource(rel);
+          hls.attachMedia($v);
+          $v.muted = true; $v.play().catch(()=>{});
+        }else if($v.canPlayType('application/vnd.apple.mpegurl')){
+          $v.src = rel; $v.muted = true; $v.play().catch(()=>{});
+        }else{
+          alert('HLS غير مدعوم');
+        }
+      }catch(e){ log('خطأ المعاينة: '+e.message); }
+    }
+
+    $btn.addEventListener('click', e=>{ e.preventDefault(); createLink(); });
+    $copy.addEventListener('click', e=>{
+      e.preventDefault();
+      if(!$out.value) return;
+      navigator.clipboard.writeText($out.value).then(()=>log('تم النسخ'));
+    });
+  })();
+  </script>
+</body>
+</html>
