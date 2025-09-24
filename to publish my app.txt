@@ -1,94 +1,21 @@
-تمام، بما إنك ما عندك دومين وتبغى الخدمة “Public” بدون رفع الكود على GitHub، فأسرع حل رسمي لك الآن هو تشغيلها عبر Cloudflare Quick Tunnel لكن بشكل “محترف” (سكربت يطلّع لك الرابط تلقائياً ويتأكد من جاهزية الخدمة). إذا رغبت لاحقاً برابط ثابت لا يتغير، وقتها ننشر على Render (يتطلب ربط GitHub)، وأعطيك ملفاته الجاهزة لاحقاً.
-
-تشغيل الخدمة محلي + نفق عام ثابت مؤقتًا (Quick Tunnel)
-1) شغّل الحاويات وتأكد إن الـ UI شغّال
-
-افتح PowerShell (عادي يكفي):
-
-cd "C:\Users\sale7\Desktop\stream-gateway"
-
-docker compose down
-docker compose up -d
-
-# لازم يرجع 200 أو 304
-curl.exe -I http://127.0.0.1:8090/
-
-2) سكربت نفق Cloudflare قوي (يبيّن لك رابط trycloudflare)
-
-احفظ الملف التالي باسم:
-
-C:\Users\sale7\Desktop\stream-gateway\cloudflare\run-quick-tunnel.ps1
+تشغيل التطبيق
+افتح 
+powershell in desktop 🖥 then gateway-stream folder
 
 
-المحتوى:
-
-$ErrorActionPreference = 'Continue'
-$cfExe  = "C:\cloudflared\cloudflared.exe"
-$target = 'http://127.0.0.1:8090'
-$log    = "$env:USERPROFILE\Desktop\cloudflared.log"
-
-Write-Host "Killing old cloudflared (if any)..."
-Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
-
-# تأكد أن الصفحة جاهزة
-for($i=1;$i -le 30;$i++){
-  $code = curl.exe -s -o NUL -w "%{http_code}" $target
-  if($code -in @("200","304")){ break }
-  Start-Sleep 1
-}
-if($code -notin @("200","304")){ throw "Nginx على 8090 غير جاهز" }
-
-Write-Host "Starting Quick Tunnel to $target"
-# نشغّل foreground عشان نشوف الرابط فورًا
-& $cfExe tunnel --url $target --http-host-header localhost --no-autoupdate 2>&1 | Tee-Object -FilePath $log -Append
-
-
-التشغيل:
-
-powershell -ExecutionPolicy Bypass -File "C:\Users\sale7\Desktop\stream-gateway\cloudflare\run-quick-tunnel.ps1"
-
-
-عند الإقلاع سيطبع لك سطر شبيه بـ:
-
-https://something.trycloudflare.com
-
-
-هذا هو الرابط العام للواجهة. افتحه في المتصفح وستظهر صفحة المُحوّل نفسها (وتولد روابط HLS على نفس الأصل).
-
-لو واجهت 502 Bad Gateway: تأكد أن خطوة (1) رجّعت 200/304، واترك 5–10 ثواني، ثم حدّث الصفحة.
-لو ظهر Could not resolve host عند استخدام curl فقط، جرّب بالمتصفح (DNS المحلي أحيانًا يتأخر).
-
-3) إنشاء رابط HLS من الواجهة
-
-افتح رابط trycloudflare الذي ظهر لك.
-
-ضع رابط المصدر في الحقل (مثال: https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8)
-
-اضغط إنشاء رابط جديد.
-سيظهر لك رابط m3u8 على نفس الدومين *.trycloudflare.com ويمكنك نسخه واختباره في أي مكان.
-
-4) أوامر تشغيل/إيقاف جاهزة (للحفظ)
-
-تشغيل الخدمات:
 
 cd "C:\Users\sale7\Desktop\stream-gateway"
 docker compose up -d
+& "C:\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8090 --http-host-header localhost --no-autoupdate
 
 
-إيقاف الخدمات:
 
-cd "C:\Users\sale7\Desktop\stream-gateway"
-docker compose down
+
+ايقاف التطبيق
+افتح 
+powershell in desktop 🖥 then gateway-stream folder
+
+
+
 Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
-
-خيار بديل (اختياري لاحقًا): رابط عام ثابت بدون دومينك الخاص
-
-بما إن عندك حساب Render وGitHub، أقدر أجهّز لك نسخة “حاوية واحدة” (Node+FFmpeg تخدم الـ UI وملفات HLS مباشرة) وتُنشر على:
-
-https://your-app.onrender.com
-
-
-هذا رابط ثابت أفضل من trycloudflare المؤقت. يتطلب فقط ربط مستودع GitHub مع Render.
-إذا حاب نسلك هذا الطريق، قلّي وراح أرسللك “الحزمة الكاملة” (Dockerfile + server.js + package.json + web/index.html) مع خطوات النشر بـ Render خطوة بخطوة.
-
-لو واجهت رسالة خطأ محددة أثناء تشغيل السكربت أو فتح رابط trycloudflare، انسخها لي كما هي، وأنا أعطيك إصلاحها مباشرة.
+docker compose down

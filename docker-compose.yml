@@ -1,18 +1,13 @@
-version: "3.9"
-
 services:
   api:
-    build:
-      context: ./api
-      dockerfile: Dockerfile
-    image: stream-gateway-api
+    build: ./api
     container_name: stream-api
     environment:
-      - NODE_ENV=production
+      - PORT=3000
       - HLS_DIR=/data/hls
-      # لو أردت تمرير User-Agent أو تعطيل TLS تحقق:
-      - FFMPEG_USER_AGENT=Mozilla/5.0
-      - FFMPEG_TLS_VERIFY=0
+      - MAX_JOBS=12
+      - OVERFLOW_POLICY=evict_oldest
+      - JOB_TTL_MIN=600
     volumes:
       - ./hls:/data/hls
     ports:
@@ -22,12 +17,12 @@ services:
   nginx:
     image: nginx:stable
     container_name: stream-nginx
-    depends_on:
-      - api
-    ports:
-      - "8090:80"
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./web:/usr/share/nginx/html:ro
-      - ./hls:/hls
+      - ./hls:/hls:ro
+    ports:
+      - "8090:80"
+    depends_on:
+      - api
     restart: unless-stopped
