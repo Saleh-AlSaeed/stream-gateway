@@ -4,10 +4,14 @@ hls/
 
 # env
 .env
+.env.*.local
 
-# local tools
-cloudflare/*.exe
-cloudflare/*.ps1
+# local-only tools
+cloudflare/
+*.ps1
+*.bat
+*.cmd
+*.exe
 
 # OS/editor
 .DS_Store
