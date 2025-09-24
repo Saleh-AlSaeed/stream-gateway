@@ -1,0 +1,377 @@
+
+open powershell
+
+
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose up -d
+docker compose ps
+curl.exe -I http://127.0.0.1:8090/
+
+A) إعادة التشغيل اليدوية الآن (خطوات سريعة)
+
+افتح PowerShell (ويفضّل كمسؤول):
+
+# 1) أوقف أي cloudflared شغّال
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# 2) شغّل حاويات Docker
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose up -d
+
+# 3) تأكيد أن الخدمات اشتغلت
+docker compose ps
+docker logs stream-nginx --tail=40
+docker logs stream-api --tail=40
+
+# 4) اختبار الواجهة محليًا (لازم 200/304)
+curl.exe -I http://127.0.0.1:8090/
+
+
+إذا أعطى 200 OK، شغّل التانل:
+
+# 5) تشغيل Quick Tunnel (نافذة تبقى مفتوحة)
+& "C:\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8090 --http-host-header localhost --no-autoupdate
+
+
+سيظهر رابط مثل:
+
+https://xxxxx-xxxxx.trycloudflare.com
+
+
+افتحه؛ يجب أن ترى واجهة المشروع.
+
+ملاحظة: لو docker compose up -d لم يُشغّل الحاويات، تأكد أن Docker Desktop نفسه شغّال (شغّله من قائمة Start)، ثم أعد الأوامر.
+
+
+
+----------------------------------------------------------------------------------------------
+
+
+
+B) أوامر إيقاف/تشغيل/إعادة تشغيل محفوظة (للاستخدام وقت الحاجة)
+إيقاف كل شيء:
+# أوقف أي مهام مجدولة إن وُجدت
+schtasks /End /TN "StreamGateway Tunnel" 2> NUL
+schtasks /End /TN "StreamGateway Docker" 2> NUL
+
+# أوقف cloudflared
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# أنزل الحاويات
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose down
+
+تشغيل كل شيء:
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose up -d
+curl.exe -I http://127.0.0.1:8090/
+
+# تشغيل التانل (يدوي)
+& "C:\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8090 --http-host-header localhost --no-autoupdate
+
+إعادة التشغيل:
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose down
+docker compose up -d
+
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+& "C:\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8090 --http-host
+
+
+
+----------------------------------------------------------------------------------------------------
+
+
+C) (اختياري) سكربت تحكّم واحد يجمع الأوامر
+
+احفظ هذا الملف باسم:
+
+C:\Users\sale7\Desktop\stream-gateway\streamctl.ps1
+
+
+ثم شغّله مثل:
+
+.\streamctl.ps1 start-all
+
+.\streamctl.ps1 stop-all
+
+.\streamctl.ps1 restart-all
+
+.\streamctl.ps1 status
+
+.\streamctl.ps1 tunnel-start / tunnel-stop / tunnel-restart
+
+محتوى السكربت
+param(
+  [ValidateSet('start-all','stop-all','restart-all','status','docker-start','docker-stop','docker-restart','tunnel-start','tunnel-stop','tunnel-restart')]
+  [string]$Cmd = 'status'
+)
+
+$composeDir = 'C:\Users\sale7\Desktop\stream-gateway'
+$cfExe      = 'C:\cloudflared\cloudflared.exe'
+
+function Docker-Start  { Push-Location $composeDir; docker compose up -d; Pop-Location }
+function Docker-Stop   { Push-Location $composeDir; docker compose down; Pop-Location }
+function Docker-Restart{ Push-Location $composeDir; docker compose down; docker compose up -d; Pop-Location }
+function Docker-Status { Push-Location $composeDir; docker compose ps; Pop-Location }
+
+function Tunnel-Start {
+  Start-Process powershell -ArgumentList '-NoExit','-Command',"`"$cfExe`" tunnel --url http://127.0.0.1:8090 --http-host-header localhost --no-autoupdate"
+}
+function Tunnel-Stop {
+  Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+}
+function Tunnel-Restart { Tunnel-Stop; Start-Sleep -Seconds 2; Tunnel-Start }
+
+switch ($Cmd) {
+  'docker-start'   { Docker-Start }
+  'docker-stop'    { Docker-Stop }
+  'docker-restart' { Docker-Restart }
+  'status'         { Docker-Status; return }
+  'tunnel-start'   { Tunnel-Start }
+  'tunnel-stop'    { Tunnel-Stop }
+  'tunnel-restart' { Tunnel-Restart }
+  'start-all'      { Docker-Start; Tunnel-Start }
+  'stop-all'       { Tunnel-Stop; Docker-Stop }
+  'restart-all'    { Tunnel-Stop; Docker-Restart; Tunnel-Start }
+}
+
+
+
+
+-----------------------------------------------------------------------------------------------------
+
+
+D) فحصين مهمين لو تكرّر فشل التشغيل
+
+تأكد وجود ملف docker-compose.yml في:
+
+C:\Users\sale7\Desktop\stream-gateway\docker-compose.yml
+
+
+واستخدم:
+
+Get-Content .\docker-compose.yml
+
+
+تأكد nginx.conf موجود وصحيح (في نفس المجلد)، ثم:
+
+docker compose restart nginx
+docker logs stream-nginx --tail=60
+
+
+
+
+------------------------------------------------------------------------------------------
+
+
+1) اختبار الـ API محليًا وإنشاء ID جديد
+
+افتح PowerShell في:
+C:\Users\sale7\Desktop\stream-gateway ثم:
+
+# أنشئ مهمة بث (وضع copy أسرع للاختبار)
+$body = @{ srcUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"; mode = "copy" } | ConvertTo-Json -Compress
+$r = Invoke-RestMethod -Uri "http://127.0.0.1:8090/api/create" -Method POST -ContentType "application/json" -Body $body
+$r  # يعرض id و url
+
+# تحقّق من المانيفست محليًا (لازم 200)
+curl.exe -I "http://127.0.0.1:8090/hls/$($r.id)/index.m3u8"
+
+
+لو بغيت أحدث ID من اللوج مباشرة:
+
+$id = (docker logs stream-api --tail=400 | Select-String -Pattern 'FFMPEG ([\w\-]+)\]' | Select-Object -Last 1).Matches[0].Groups[1].Value
+curl.exe -I "http://127.0.0.1:8090/hls/$id/index.m3u8"
+
+------------------------------------------------------------------------------------------------
+
+2) تشغيل Quick Tunnel (مع تحسينات للثبات)
+
+المرة الجاية شغّل التانل بهذه الخيارات لتقليل مشاكل الشبكة/DNS:
+
+& "C:\cloudflared\cloudflared.exe" `
+  tunnel `
+  --url http://127.0.0.1:8090 `
+  --http-host-header localhost `
+  --no-autoupdate `
+  --protocol http2 `            # بديل للـ QUIC لو كان محجوب
+  --edge-ip-version 4 `         # أجبر IPv4 لتفادي ::1
+  --metrics 127.0.0.1:0         # بورت متريكس عشوائي لو عندك نوافذ متعددة
+
+
+سيطبع لك رابط مثل:
+
+https://cart-incident-leather-miller.trycloudflare.com
+
+
+ملاحظة عن رسالة:
+Failed to refresh DNS local resolver ... i/o timeout
+
+غالبًا عابرة. إن كان الرابط يفتح فاعتبرها بنينة. لو حسّيت التانل ما يرد، اضغط Ctrl+C وأعد تشغيل الأمر أعلاه.
+
+3) بناء رابطك العام للاختبار
+
+بعد ما ظهر لك المضيف من الخطوة السابقة:
+
+$cfHost = "https://cart-incident-leather-miller.trycloudflare.com"  # غيّرها كل مرة حسب ما يظهر لك
+$public = "$cfHost/hls/$($r.id)/index.m3u8"
+$public
+curl.exe -I $public
+
+
+لو رجع 404: غالبًا ID قديم/غير مطابق. استخرج آخر ID كما في الخطوة (1) وأعد بناء $public.
+
+تقدر تتأكد أن الملفات موجودة ومُركَّبة بين الكونتينرين:
+
+docker exec stream-api   sh -lc "ls -lah /data/hls/$($r.id) | head -n 20"
+docker exec stream-nginx sh -lc "ls -lah /hls/$($r.id)      | head -n 20"
+
+
+يجب أن يعرضا نفس الملفات.
+
+4) سكربت تشغيل تلقائي للتانل (اختياري بدل اليدوي)
+
+لو تبغى نافذة مخفيّة تعيد تشغيل التانل تلقائيًا:
+
+احفظ هذا في:
+C:\Users\sale7\Desktop\stream-gateway\cloudflare\cloudflared-quick.ps1
+
+$ErrorActionPreference = 'SilentlyContinue'
+$cf = "C:\cloudflared\cloudflared.exe"
+$target = 'http://127.0.0.1:8090'
+while ($true) {
+  try {
+    & $cf tunnel --url $target --http-host-header localhost --no-autoupdate --protocol http2 --edge-ip-version 4 --metrics 127.0.0.1:0
+  } catch { }
+  Start-Sleep -Seconds 3
+}
+
+
+تشغيله:
+
+powershell -ExecutionPolicy Bypass -File "C:\Users\sale7\Desktop\stream-gateway\cloudflare\cloudflared-quick.ps1"
+
+5) تذكير بأوامر التشغيل/الإيقاف السريعة (اختصرها عندك)
+
+تشغيل كل شيء:
+
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose up -d
+& "C:\cloudflared\cloudflared.exe" tunnel --url http://127.0.0.1:8090 --http-host-header localhost --no-autoupdate --protocol http2 --edge-ip-version 4
+
+
+إيقاف كل شيء:
+
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose down
+
+
+إذا واجهت أي خطأ في أي خطوة (خاصّة 404 أو مشاكل DNS)، أرسل لي الأمر مع ناتجه، وأنا أعطيك التعديل المناسب مباشرة.
+
+
+
+
+
+
+
+
+
+
+---------------------------------------------------------------------------------------------
+C:\Users\sale7\Desktop\stream-gateway\streamctl.ps1
+ثم شغّله مع أمر واحد: .\streamctl.ps1 start-all أو stop-all أو restart-all أو status أو tunnel-start… إلخ.
+
+
+
+1- إيقاف كل شيء (التانل + الدوكر):
+
+
+
+# أوقف المهام المجدولة (لو كنت عاملها)
+schtasks /End /TN "StreamGateway Tunnel" 2> NUL
+schtasks /End /TN "StreamGateway Docker" 2> NUL
+
+# أوقف أي cloudflared شغّال يدويًا
+Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# نزل الحاويات
+cd "C:\Users\sale7\Desktop\stream-gateway"
+docker compose down
+
+
+
+
+2- شغيل كل شيء (الدوكر ثم التانل):   
+
+
+
+docker compose ps
+curl.exe -I http://127.0.0.1:8090/
+docker logs stream-nginx --tail=60
+docker logs stream-api --tail=60
+Get-Content "$env:USERPROFILE\Desktop\cloudflared.log" -Tail 60
+
+
+
+
+3- طريقة الحفظ السريعة:
+
+
+$ctl = 'C:\Users\sale7\Desktop\stream-gateway\streamctl.ps1'
+Set-Content -LiteralPath $ctl -Encoding UTF8 -Value @'
+(الصق محتوى السكربت هنا)
+'@
+
+
+
+
+
+
+4- أمثلة استخدام:
+
+cd "C:\Users\sale7\Desktop\stream-gateway"
+
+# إيقاف كل شيء
+.\streamctl.ps1 stop-all
+
+# تشغيل كل شيء
+.\streamctl.ps1 start-all
+
+# إعادة تشغيل الكل
+.\streamctl.ps1 restart-all
+
+# حالة الدوكر
+.\streamctl.ps1 status
+
+# تشغيل/إيقاف/إعادة تشغيل التانل فقط
+.\streamctl.ps1 tunnel-start
+.\streamctl.ps1 tunnel-stop
+.\streamctl.ps1 tunnel-restart
+
+# استخراج آخر مضيف trycloudflare من اللوج
+.\streamctl.ps1 tunnel-host
+
+
+
+
+5- تلميحات مهمة
+
+دائمًا اختبر الواجهة محليًا قبل أي شيء:
+
+
+curl.exe -I http://127.0.0.1:8090/
+
+
+
+لازم تشوف 200/304.
+
+التانل Quick Tunnel يتغيّر مضيفه كل مرة؛ استخدم tunnel-host لاستخراج آخر رابط من اللوج بسرعة.
+
+لو سكّرت نافذة التانل اليدوية، الرابط يتوقف—للاستخدام المستمر الأفضل تشغيله كمهمة مجدولة مخفية.
+
+لو تحب، أضيف لك أوامر “إنشاء” المهام المجدولة (إن ما أنشأناها عندك) وخلاص تصير تتحكم كله من streamctl.ps1
+
+

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -85,5 +86,116 @@
     });
   })();
   </script>
+=======
+﻿<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>بوابة البث HLS</title>
+  <style>
+    body{font-family:Tahoma,Arial,sans-serif;margin:20px}
+    label{display:block;margin:.5rem 0 .25rem}
+    input,select,button,textarea{font-size:16px;padding:.5rem}
+    .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+    .row>*{flex:1 1 auto}
+    #player{width:100%;max-width:720px;height:406px;background:#000;margin-top:12px}
+    #debug{width:100%;height:140px;background:#111;color:#0f0;padding:8px;white-space:pre;overflow:auto}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+  <h2>إنشاء رابط HLS</h2>
+
+  <label>رابط المصدر (SRT/UDP/HLS m3u8)</label>
+  <input id="src" placeholder="مثال: https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8">
+
+  <div class="row">
+    <div>
+      <label>الوضع</label>
+      <select id="mode">
+        <option value="copy">Copy (أسرع/بدون ترميز)</option>
+        <option value="transcode">Transcode (H.264/AAC)</option>
+      </select>
+    </div>
+    <div style="display:flex;align-items:flex-end;gap:8px">
+      <button id="btnCreate">إنشاء رابط جديد</button>
+      <button id="btnCopy">نسخ الرابط</button>
+    </div>
+  </div>
+
+  <label>الرابط الناتج</label>
+  <input id="out" readonly>
+
+  <video id="player" controls playsinline></video>
+
+  <h3>السجل</h3>
+  <textarea id="debug" readonly></textarea>
+
+<script>
+(() => {
+  const $src   = document.querySelector('#src');
+  const $mode  = document.querySelector('#mode');
+  const $out   = document.querySelector('#out');
+  const $copy  = document.querySelector('#btnCopy');
+  const $make  = document.querySelector('#btnCreate');
+  const $video = document.querySelector('#player');
+  const $log   = document.querySelector('#debug');
+
+  function log(msg){ $log.value += msg + '\n'; $log.scrollTop = $log.scrollHeight; }
+
+  async function createLink() {
+    const srcUrl = ($src.value || '').trim();
+    const mode   = ($mode.value || 'copy').trim();
+    if (!srcUrl) { alert('ضع رابط المصدر'); return; }
+
+    log(`POST /api/create src="${srcUrl}" mode=${mode}`);
+    const res = await fetch('/api/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ srcUrl, mode })
+    });
+    if (!res.ok) { log(`HTTP ${res.status}`); alert('فشل الإنشاء'); return; }
+    const data = await res.json(); // {id, url}
+    const rel  = `/hls/${data.id}/index.m3u8`;
+    const abs  = `${location.origin}${rel}`;
+    $out.value = abs;
+    log(`تم الإنشاء id=${data.id}`);
+
+    // ننتظر حتى يصبح المانيفست جاهز
+    for (let i=0;i<20;i++){
+      try {
+        const h = await fetch(rel, { method:'HEAD', cache:'no-store' });
+        if (h.ok) break;
+      } catch {}
+      await new Promise(r=>setTimeout(r,700));
+    }
+
+    try {
+      if (window.hls) { try { window.hls.destroy(); } catch{} }
+      if (window.Hls && Hls.isSupported()) {
+        window.hls = new Hls({ maxBufferLength: 10 });
+        window.hls.on(Hls.Events.ERROR, (_, d)=>log('HLS.js '+(d?.details||'error')));
+        window.hls.loadSource(rel);
+        window.hls.attachMedia($video);
+        $video.muted = true;
+        $video.play().catch(()=>{});
+      } else if ($video.canPlayType('application/vnd.apple.mpegurl')) {
+        $video.src = rel; $video.muted=true; $video.play().catch(()=>{});
+      } else {
+        alert('HLS غير مدعوم');
+      }
+    } catch (e) { log('Play error: '+e.message); }
+  }
+
+  $make.addEventListener('click', e => { e.preventDefault(); createLink(); });
+  $copy.addEventListener('click', e => {
+    e.preventDefault();
+    if (!$out.value) return;
+    navigator.clipboard.writeText($out.value).then(()=>log('تم نسخ الرابط'));
+  });
+})();
+</script>
+>>>>>>> 1347d7f (stream-gateway: render + workers setup)
 </body>
 </html>

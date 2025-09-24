@@ -1,0 +1,14 @@
+# outputs
+hls/
+*.log
+
+# env
+.env
+
+# local tools
+cloudflare/*.exe
+cloudflare/*.ps1
+
+# OS/editor
+.DS_Store
+Thumbs.db
