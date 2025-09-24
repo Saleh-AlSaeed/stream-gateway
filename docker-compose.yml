@@ -1,13 +1,10 @@
 services:
   api:
     build: ./api
-    container_name: stream-api
     environment:
-      - PORT=3000
       - HLS_DIR=/data/hls
-      - MAX_JOBS=12
-      - OVERFLOW_POLICY=evict_oldest
-      - JOB_TTL_MIN=600
+      - PORT=3000
+      - MAX_JOBS=12    # ← غيّرها كما تشاء
     volumes:
       - ./hls:/data/hls
     ports:
@@ -16,7 +13,6 @@ services:
 
   nginx:
     image: nginx:stable
-    container_name: stream-nginx
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./web:/usr/share/nginx/html:ro
