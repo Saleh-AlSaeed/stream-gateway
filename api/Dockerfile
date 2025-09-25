@@ -1,4 +1,4 @@
-﻿FROM node:20-alpine
+FROM node:20-alpine
 RUN apk add --no-cache ffmpeg tini
 WORKDIR /usr/src/app
 

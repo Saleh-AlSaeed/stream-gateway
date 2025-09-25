@@ -1,199 +1,176 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>محوّل بث HLS يعمل في المتصفحات (SRT/UDP/HLS)</title>
-  <script defer src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <meta charset="utf-8">
+  <title>محوّل بث HLS يعمل في المتصفحات</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <style>
-    :root{color-scheme:dark light}
-    body{
-      margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Noto Kufi Arabic",Tahoma,Arial,sans-serif;
-      background:#0b0f14; color:#e6edf3;
-    }
-    .wrap{max-width:1050px; margin:24px auto; padding:0 16px}
-    h1{font-size:22px; margin:10px 0 18px; display:flex; align-items:center; gap:10px}
-    .badge{
-      display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; line-height:20px;
-      background:#9aa1a8; color:#fff; vertical-align:middle
-    }
-    .badge.ready{ background:#16a34a }
-    .row{display:flex; gap:10px; margin:8px 0; align-items:center; flex-wrap:wrap}
-    input[type="text"]{
-      flex:1 1 560px; background:#0f141a; color:#e6edf3; border:1px solid #243142;
-      border-radius:8px; padding:10px 12px; outline:none;
-    }
-    select, button{
-      background:#111723; color:#e6edf3; border:1px solid #243142; border-radius:8px; padding:10px 12px;
-      cursor:pointer
-    }
-    button.primary{ background:#1f6feb; border-color:#1f6feb }
-    button:disabled{ opacity:.6; cursor:not-allowed }
-    .panel{
-      background:#0f141a; border:1px solid #243142; border-radius:12px; padding:12px; margin-top:12px
-    }
-    video{ width:100%; max-height:58vh; background:#000; border-radius:10px }
-    .debug pre{
-      max-height:220px; overflow:auto; white-space:pre-wrap; direction:ltr; text-align:left;
-      background:#0b0f14; color:#9ecbff; padding:10px; border-radius:8px; margin:0
-    }
-    .muted{ opacity:.8; font-size:12px; margin-top:6px }
+    body{background:#0f1216;color:#e6e6e6;font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;padding:16px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+    input,select,button,textarea{background:#1a1f25;color:#e6e6e6;border:1px solid #2a323c;border-radius:8px;padding:10px}
+    input,select{flex:1;min-width:220px}
+    button{cursor:pointer}
+    .btn{padding:10px 14px}
+    .btn-primary{background:#2d76ff;border-color:#2d76ff}
+    .btn-ghost{background:#14181d}
+    .badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;margin-inline-start:8px}
+    .ok{background:#124e2b;color:#9af7b7;border:1px solid #1e8a4b}
+    .wait{background:#3a2a00;color:#ffd27a;border:1px solid #6d4c00}
+    #player{width:100%;max-width:960px;aspect-ratio:16/9;background:#000;border-radius:10px;border:1px solid #2a323c}
+    #debug{width:100%;max-width:960px;height:120px}
+    .label{opacity:.8;font-size:13px;margin-top:-6px;margin-bottom:4px}
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 </head>
 <body>
-  <div class="wrap">
-    <h1>
-      محوّل بث HLS يعمل في المتصفحات
-      <span id="manifestBadge" class="badge">غير جاهز</span>
-    </h1>
 
-    <div class="row">
-      <button id="btnCreate" class="primary">إنشاء رابط جديد</button>
-      <select id="mode" title="طريقة التحويل">
-        <option value="copy" selected>حافظ على الجودة إن أمكن (Copy)</option>
-        <option value="transcode">تحويل إلى H.264/AAC (Transcode)</option>
-      </select>
-    </div>
+  <h2 style="margin-top:0">محوّل بث <b>HLS</b> يعمل في المتصفحات
+    <span id="badge" class="badge wait">انتظر</span>
+  </h2>
 
-    <div class="row">
-      <input id="src" type="text" placeholder="أدخل مصدر البث: m3u8 / SRT / UDP … مثلا: https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" />
-      <button id="btnCopyPublic">نسخ الرابط العام</button>
-    </div>
-
-    <div class="row">
-      <input id="out" type="text" placeholder="سيظهر هنا رابط HLS النهائي" readonly />
-      <button id="btnCopy">نسخ</button>
-    </div>
-
-    <div class="panel">
-      <video id="player" controls playsinline></video>
-      <div class="muted">ملحوظة: قد يستغرق الإنشاء أول مرة لحظات. الصفحة تنتظر تلقائيًا حتى يصبح الـ manifest جاهز.</div>
-    </div>
-
-    <div class="panel debug">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <strong>Debug</strong>
-        <button id="btnClear">مسح</button>
-      </div>
-      <pre id="debug"></pre>
-    </div>
+  <div class="row">
+    <button id="btnCreate" class="btn btn-primary">إنشاء رابط جديد</button>
+    <select id="mode" style="max-width:220px">
+      <option value="copy" selected>حافظ على الجودة إن أمكن (Copy)</option>
+      <option value="transcode">تحويل (Transcode)</option>
+    </select>
   </div>
 
-  <script>
-  (() => {
-    const $src   = document.querySelector('#src');
-    const $mode  = document.querySelector('#mode');
-    const $out   = document.querySelector('#out');
-    const $btnCreate = document.querySelector('#btnCreate');
-    const $btnCopy   = document.querySelector('#btnCopy');
-    const $btnCopyPublic = document.querySelector('#btnCopyPublic');
-    const $btnClear = document.querySelector('#btnClear');
-    const $video = document.querySelector('#player');
-    const $badge = document.querySelector('#manifestBadge');
-    const $dbg   = document.querySelector('#debug');
+  <div class="row">
+    <input id="src" placeholder="ضع رابط المصدر (SRT/UDP/HLS m3u8)" value="https://46.152.17.35/hls/live/playlist.m3u8">
+    <button id="btnCopyLocal" class="btn btn-ghost" title="نسخ الرابط المحلي">نسخ</button>
+  </div>
+  <div class="label">سيظهر هنا رابط HLS النهائي (محلي):</div>
+  <div class="row">
+    <input id="outLocal" readonly>
+  </div>
 
-    function logLine(msg){
-      try{
-        const t = new Date().toLocaleTimeString();
-        $dbg.textContent += `[${t}] ${msg}\n`;
-        $dbg.scrollTop = $dbg.scrollHeight;
-      }catch(_){}
+  <div class="row">
+    <button id="btnCopyPublic" class="btn btn-ghost">نسخ الرابط العام</button>
+  </div>
+  <div class="label">الرابط العام (إن وُجد tunnel.txt أو الصفحة مفتوحة عبر trycloudflare):</div>
+  <div class="row">
+    <input id="outPublic" readonly placeholder="سيملأ تلقائيًا إن تم العثور على العنوان العام">
+  </div>
+
+  <video id="player" controls playsinline></video>
+
+  <p style="max-width:960px;opacity:.7">ملاحظة: قد يستغرق الإنشاء أول مرة لحظات. نتحقق تلقائيًا من جاهزية
+    الـ manifest حتى يصبح <b>جاهز</b>.</p>
+
+  <div class="row">
+    <button id="btnCopyLog" class="btn btn-ghost">نسخ</button>
+  </div>
+  <textarea id="debug" readonly></textarea>
+
+<script>
+(() => {
+  const $src   = document.getElementById('src');
+  const $mode  = document.getElementById('mode');
+  const $outL  = document.getElementById('outLocal');
+  const $outP  = document.getElementById('outPublic');
+  const $btnL  = document.getElementById('btnCopyLocal');
+  const $btnP  = document.getElementById('btnCopyPublic');
+  const $btnC  = document.getElementById('btnCreate');
+  const $dbg   = document.getElementById('debug');
+  const $badge = document.getElementById('badge');
+  const $video = document.getElementById('player');
+
+  let publicBase = null;  // سيتم تعبئته من trycloudflare أو من tunnel.txt
+
+  function logLine(msg){ $dbg.value += `[${(new Date).toLocaleTimeString()}] ${msg}\n`; $dbg.scrollTop = $dbg.scrollHeight; }
+  function setBadge(ok){
+    if(ok){ $badge.className = 'badge ok'; $badge.textContent = 'جاهز'; }
+    else  { $badge.className = 'badge wait'; $badge.textContent = 'انتظر'; }
+  }
+  async function headOk(url){
+    try{
+      const r = await fetch(url, { method:'HEAD', cache:'no-store' });
+      return r.ok;
+    }catch(_){ return false; }
+  }
+  async function detectPublicBase(){
+    // 1) لو الصفحة نفسها على trycloudflare
+    if (location.hostname.endsWith('trycloudflare.com')) {
+      publicBase = location.origin;
+      return;
     }
-    function setBadge(ok){
-      if(!$badge) return;
-      if(ok){ $badge.textContent='جاهز'; $badge.classList.add('ready'); }
-      else  { $badge.textContent='غير جاهز'; $badge.classList.remove('ready'); }
-    }
-    function absUrl(rel){ return `${location.origin}${rel}`; }
-
-    async function createLink(){
-      const srcUrl = ($src?.value || '').trim();
-      const mode   = ($mode?.value || 'copy').trim();
-      if(!srcUrl){ alert('ضع رابط المصدر'); return; }
-
-      setBadge(false);
-      $btnCreate.disabled = true;
-
-      try{
-        logLine(`api/create src="${srcUrl}" mode=${mode}`);
-        const r = await fetch('/api/create', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ srcUrl, mode })
-        });
-
-        if(r.status === 429){
-          const j = await r.json().catch(()=>({}));
-          const retry = r.headers.get('Retry-After') || '';
-          alert(j.message || `الخادم مشغول الآن. أعد المحاولة لاحقًا${retry?` (بعد ${retry} ثوانٍ)`:''}`);
-          logLine(`HTTP 429 ${j.message||''}`);
-          return;
-        }
-
-        if(!r.ok){
-          const txt = await r.text();
-          alert('فشل إنشاء الرابط'); logLine(`HTTP ${r.status}\n${txt}`); return;
-        }
-
-        const data = await r.json(); // {id, url: "/hls/<id>/index.m3u8"}
-        const rel  = data.url || `/hls/${data.id}/index.m3u8`;
-        const abs  = absUrl(rel);
-        if($out) $out.value = abs;
-        logLine(`OK id=${data.id} url=${abs}`);
-
-        // انتظار جاهزية المانيفست
-        let ready = false;
-        for(let i=0;i<20;i++){
-          try{
-            const head = await fetch(rel, { method:'HEAD', cache:'no-store' });
-            if(head.ok){ ready = true; break; }
-          }catch(_){}
-          await new Promise(r=>setTimeout(r,700));
-        }
-        setBadge(ready);
-        if(!ready) logLine('HLS.js: manifest ليس جاهزًا بعد (سأحاول التشغيل على أي حال).');
-
-        // تشغيل المعاينة
-        try{
-          if(window.hls){ try{ window.hls.destroy(); }catch(_){ } }
-          if(window.Hls && Hls.isSupported()){
-            window.hls = new Hls({ maxBufferLength: 10 });
-            window.hls.loadSource(rel);
-            window.hls.attachMedia($video);
-            $video.muted = true;
-            $video.play().catch(()=>{});
-          }else if($video && $video.canPlayType('application/vnd.apple.mpegurl')){
-            $video.src = rel;
-            $video.muted = true;
-            $video.play().catch(()=>{});
-          }else{
-            alert('HLS غير مدعوم على هذا المتصفح');
-          }
-        }catch(e){ logLine('خطأ تشغيل المعاينة: ' + e.message); }
-      }catch(e){
-        logLine('خطأ: ' + (e?.message||e));
-        alert('حدث خطأ غير متوقع');
-      }finally{
-        $btnCreate.disabled = false;
+    // 2) جرّب قراءة tunnel.txt الذي يكتبه سكربت PowerShell
+    try{
+      const r = await fetch('/tunnel.txt', {cache:'no-store'});
+      if(r.ok){
+        const t = (await r.text()).trim();
+        if(/^https:\/\/.+trycloudflare\.com\/?$/.test(t)) publicBase = t.replace(/\/$/,'');
       }
-    }
+    }catch(_){}
+  }
 
-    $btnCreate?.addEventListener('click', e => { e.preventDefault(); createLink(); });
-    $btnCopy?.addEventListener('click', e => {
-      e.preventDefault();
-      if(!$out?.value) return;
-      navigator.clipboard.writeText($out.value).then(()=>logLine('تم نسخ الرابط')).catch(()=>{});
+  async function createLink(){
+    setBadge(false);
+    const srcUrl = ($src.value || '').trim();
+    const mode   = ($mode.value || 'copy').trim();
+    if(!srcUrl){ alert('ضع رابط المصدر'); return; }
+
+    await detectPublicBase();
+
+    logLine(`api/create src="${srcUrl}" mode=${mode}`);
+    const res = await fetch('/api/create', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ srcUrl, mode })
     });
-    // “نسخ الرابط العام”: ينسخ دومًا رابطًا مطلقًا من أصل الصفحة (مفيد جدًا مع trycloudflare)
-    $btnCopyPublic?.addEventListener('click', e => {
-      e.preventDefault();
-      if(!$out?.value){ alert('أنشئ رابطًا أولًا'); return; }
-      // لو كان في out مسار نسبي لأي سبب، نحوله لمطلق
-      const u = $out.value.startsWith('http') ? $out.value : absUrl($out.value);
-      navigator.clipboard.writeText(u).then(()=>logLine('تم نسخ الرابط العام')).catch(()=>{});
-    });
-    $btnClear?.addEventListener('click', ()=>{ $dbg.textContent=''; });
-  })();
-  </script>
+
+    if(!res.ok){
+      logLine(`HTTP ${res.status} ${res.statusText}`); alert('فشل إنشاء الرابط'); return;
+    }
+    const data = await res.json(); // {id, url?}
+    const rel  = data.url ? data.url : `/hls/${data.id}/index.m3u8`;
+
+    const localAbs  = `${location.origin}${rel}`;
+    const publicAbs = publicBase ? `${publicBase}${rel}` : '';
+
+    $outL.value = localAbs;
+    if(publicAbs) $outP.value = publicAbs;
+
+    logLine(`OK id=${data.id} url=${publicAbs || localAbs}`);
+
+    // انتظر جاهزية الـ manifest
+    let ready=false;
+    for(let i=0;i<20;i++){
+      if(await headOk(rel)){ ready=true; break; }
+      await new Promise(r=>setTimeout(r,700));
+    }
+    setBadge(ready);
+
+    // شغّل المعاينة على المسار النسبي (ليعمل محليًا أو عبر التانل)
+    try{
+      if(window.hls) try{ window.hls.destroy(); }catch(_){}
+      if(window.Hls && Hls.isSupported()){
+        window.hls = new Hls({ maxBufferLength: 10 });
+        window.hls.loadSource(rel);
+        window.hls.attachMedia($video);
+        $video.muted = true; $video.play().catch(()=>{});
+      }else if($video.canPlayType('application/vnd.apple.mpegurl')){
+        $video.src = rel; $video.muted = true; $video.play().catch(()=>{});
+      }else{
+        alert('المتصفح لا يدعم HLS');
+      }
+    }catch(e){ logLine('Preview error: '+e.message); }
+  }
+
+  // نسخ
+  function copy(val){ if(!val) return; navigator.clipboard.writeText(val).then(()=>logLine('تم النسخ')); }
+  document.getElementById('btnCopyLog').onclick   = ()=>copy($dbg.value);
+  $btnL.onclick = ()=>copy($outL.value);
+  $btnP.onclick = ()=>copy($outP.value);
+  $btnC.onclick = (e)=>{ e.preventDefault(); createLink(); };
+
+  // تهيئة عامة
+  detectPublicBase().then(()=> {
+    if(publicBase) logLine('Public base = '+publicBase);
+    else logLine('Public base not detected. افتح الواجهة عبر trycloudflare أو شغّل السكربت ليكتب tunnel.txt');
+  });
+})();
+</script>
 </body>
 </html>
